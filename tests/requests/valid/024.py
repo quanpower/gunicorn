@@ -1,5 +1,4 @@
 from gunicorn.config import Config
-from gunicorn.http.errors import LimitRequestHeaders
 
 cfg = Config()
 cfg.set('limit_request_line', 0)

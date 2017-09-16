@@ -3,22 +3,19 @@
 # This file is part of the pywebmachine package released
 # under the MIT license.
 
-from __future__ import with_statement
-
-import t
-
 import inspect
 import os
 import random
 
+from gunicorn._compat import execfile_
 from gunicorn.config import Config
-from gunicorn.http.errors import ParseException
 from gunicorn.http.parser import RequestParser
-from gunicorn.six import urlparse, execfile_
+from gunicorn.six.moves.urllib.parse import urlparse
 from gunicorn import six
 
 dirname = os.path.dirname(__file__)
 random.seed()
+
 
 def uri(data):
     ret = {"raw": data}
@@ -39,12 +36,14 @@ def uri(data):
     ret["fragment"] = parts.fragment or ''
     return ret
 
+
 def load_py(fname):
     config = globals().copy()
     config["uri"] = uri
     config["cfg"] = Config()
     execfile_(fname, config)
     return config
+
 
 class request(object):
     def __init__(self, fname, expect):
@@ -75,12 +74,15 @@ class request(object):
             yield lines[:pos+2]
             lines = lines[pos+2:]
             pos = lines.find(b"\r\n")
-        if len(lines):
+        if lines:
             yield lines
 
     def send_bytes(self):
-        for d in str(self.data.decode("latin1")):
-            yield bytes(d.encode("latin1"))
+        for d in self.data:
+            if six.PY3:
+                yield bytes([d])
+            else:
+                yield d
 
     def send_random(self):
         maxs = round(len(self.data) / 10)
@@ -89,6 +91,25 @@ class request(object):
             chunk = random.randint(1, maxs)
             yield self.data[read:read+chunk]
             read += chunk
+
+    def send_special_chunks(self):
+        """Meant to test the request line length check.
+
+        Sends the request data in two chunks, one having a
+        length of 1 byte, which ensures that no CRLF is included,
+        and a second chunk containing the rest of the request data.
+
+        If the request line length check is not done properly,
+        testing the ``tests/requests/valid/099.http`` request
+        fails with a ``LimitRequestLine`` exception.
+
+        """
+        chunk = self.data[:1]
+        read = 0
+        while read < len(self.data):
+            yield self.data[read:read+len(chunk)]
+            read += len(chunk)
+            chunk = self.data[read:]
 
     # These functions define the sizes that the
     # read functions will read with.
@@ -119,7 +140,7 @@ class request(object):
     def match_read(self, req, body, sizes):
         data = self.szread(req.body.read, sizes)
         count = 1000
-        while len(body):
+        while body:
             if body[:len(data)] != data:
                 raise AssertionError("Invalid body data read: %r != %r" % (
                                         data, body[:len(data)]))
@@ -130,9 +151,9 @@ class request(object):
             if count <= 0:
                 raise AssertionError("Unexpected apparent EOF")
 
-        if len(body):
+        if body:
             raise AssertionError("Failed to read entire body: %r" % body)
-        elif len(data):
+        elif data:
             raise AssertionError("Read beyond expected body: %r" % data)
         data = req.body.read(sizes())
         if data:
@@ -141,7 +162,7 @@ class request(object):
     def match_readline(self, req, body, sizes):
         data = self.szread(req.body.readline, sizes)
         count = 1000
-        while len(body):
+        while body:
             if body[:len(data)] != data:
                 raise AssertionError("Invalid data read: %r" % data)
             if b'\n' in data[:-1]:
@@ -152,9 +173,9 @@ class request(object):
                 count -= 1
             if count <= 0:
                 raise AssertionError("Apparent unexpected EOF")
-        if len(body):
+        if body:
             raise AssertionError("Failed to read entire body: %r" % body)
-        elif len(data):
+        elif data:
             raise AssertionError("Read beyond expected body: %r" % data)
         data = req.body.readline(sizes())
         if data:
@@ -172,7 +193,7 @@ class request(object):
                 raise AssertionError("Invalid body data read: %r != %r" % (
                                                     line, body[:len(line)]))
             body = body[len(line):]
-        if len(body):
+        if body:
             raise AssertionError("Failed to read entire body: %r" % body)
         data = req.body.readlines(sizes())
         if data:
@@ -189,7 +210,7 @@ class request(object):
                 raise AssertionError("Invalid body data read: %r != %r" % (
                                                     line, body[:len(line)]))
             body = body[len(line):]
-        if len(body):
+        if body:
             raise AssertionError("Failed to read entire body: %r" % body)
         try:
             data = six.next(iter(req.body))
@@ -236,18 +257,19 @@ class request(object):
         p = RequestParser(cfg, sender())
         for req in p:
             self.same(req, sizer, matcher, cases.pop(0))
-        t.eq(len(cases), 0)
+        assert not cases
 
     def same(self, req, sizer, matcher, exp):
-        t.eq(req.method, exp["method"])
-        t.eq(req.uri, exp["uri"]["raw"])
-        t.eq(req.path, exp["uri"]["path"])
-        t.eq(req.query, exp["uri"]["query"])
-        t.eq(req.fragment, exp["uri"]["fragment"])
-        t.eq(req.version, exp["version"])
-        t.eq(req.headers, exp["headers"])
+        assert req.method == exp["method"]
+        assert req.uri == exp["uri"]["raw"]
+        assert req.path == exp["uri"]["path"]
+        assert req.query == exp["uri"]["query"]
+        assert req.fragment == exp["uri"]["fragment"]
+        assert req.version == exp["version"]
+        assert req.headers == exp["headers"]
         matcher(req, exp["body"], sizer)
-        t.eq(req.trailers, exp.get("trailers", []))
+        assert req.trailers == exp.get("trailers", [])
+
 
 class badrequest(object):
     def __init__(self, fname):

@@ -17,10 +17,9 @@ class TestIter(object):
 
 def app(environ, start_response):
     """Application which cooperatively pauses 20 seconds (needed to surpass normal timeouts) before responding"""
-    data = b'Hello, World!\n'
     status = '200 OK'
     response_headers = [
-        ('Content-type','text/plain'),
+        ('Content-type', 'text/plain'),
         ('Transfer-Encoding', "chunked"),
     ]
     sys.stdout.write('request received')

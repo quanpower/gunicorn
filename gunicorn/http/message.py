@@ -7,21 +7,23 @@ import re
 import socket
 from errno import ENOTCONN
 
+from gunicorn._compat import bytes_to_str
 from gunicorn.http.unreader import SocketUnreader
 from gunicorn.http.body import ChunkedReader, LengthReader, EOFReader, Body
 from gunicorn.http.errors import (InvalidHeader, InvalidHeaderName, NoMoreData,
     InvalidRequestLine, InvalidRequestMethod, InvalidHTTPVersion,
     LimitRequestLine, LimitRequestHeaders)
 from gunicorn.http.errors import InvalidProxyLine, ForbiddenProxyRequest
-from gunicorn.six import BytesIO, urlsplit, bytes_to_str
+from gunicorn.six import BytesIO
+from gunicorn._compat import urlsplit
 
 MAX_REQUEST_LINE = 8190
 MAX_HEADERS = 32768
-MAX_HEADERFIELD_SIZE = 8190
+DEFAULT_MAX_HEADERFIELD_SIZE = 8190
 
 HEADER_RE = re.compile("[\x00-\x1F\x7F()<>@,;:\[\]={} \t\\\\\"]")
 METH_RE = re.compile(r"[A-Z0-9$-_.]{3,20}")
-VERSION_RE = re.compile(r"HTTP/(\d+).(\d+)")
+VERSION_RE = re.compile(r"HTTP/(\d+)\.(\d+)")
 
 
 class Message(object):
@@ -39,12 +41,11 @@ class Message(object):
             or self.limit_request_fields > MAX_HEADERS):
             self.limit_request_fields = MAX_HEADERS
         self.limit_request_field_size = cfg.limit_request_field_size
-        if (self.limit_request_field_size < 0
-            or self.limit_request_field_size > MAX_HEADERFIELD_SIZE):
-            self.limit_request_field_size = MAX_HEADERFIELD_SIZE
+        if self.limit_request_field_size < 0:
+            self.limit_request_field_size = DEFAULT_MAX_HEADERFIELD_SIZE
 
         # set max header buffer size
-        max_header_field_size = self.limit_request_field_size or MAX_HEADERFIELD_SIZE
+        max_header_field_size = self.limit_request_field_size or DEFAULT_MAX_HEADERFIELD_SIZE
         self.max_buffer_headers = self.limit_request_fields * \
             (max_header_field_size + 2) + 4
 
@@ -52,7 +53,7 @@ class Message(object):
         self.unreader.unread(unused)
         self.set_body_reader()
 
-    def parse(self):
+    def parse(self, unreader):
         raise NotImplementedError()
 
     def parse_headers(self, data):
@@ -63,7 +64,7 @@ class Message(object):
 
         # Parse headers into key/value pairs paying attention
         # to continuation lines.
-        while len(lines):
+        while lines:
             if len(headers) >= self.limit_request_fields:
                 raise LimitRequestHeaders("limit request headers fields")
 
@@ -80,7 +81,7 @@ class Message(object):
             name, value = name.strip(), [value.lstrip()]
 
             # Consume value continuation lines
-            while len(lines) and lines[0].startswith((" ", "\t")):
+            while lines and lines[0].startswith((" ", "\t")):
                 curr = lines.pop(0)
                 header_length += len(curr)
                 if header_length > self.limit_request_field_size > 0:
@@ -172,7 +173,7 @@ class Request(Message):
             buf.write(rbuf)
             line, rbuf = self.read_line(unreader, buf, self.limit_request_line)
 
-        self.parse_request_line(bytes_to_str(line))
+        self.parse_request_line(line)
         buf = BytesIO()
         buf.write(rbuf)
 
@@ -213,11 +214,10 @@ class Request(Message):
                 if idx > limit > 0:
                     raise LimitRequestLine(idx, limit)
                 break
+            elif len(data) - 2 > limit > 0:
+                raise LimitRequestLine(len(data), limit)
             self.get_data(unreader, buf)
             data = buf.getvalue()
-
-            if len(data) - 2 > limit > 0:
-                raise LimitRequestLine(len(data), limit)
 
         return (data[:idx],  # request line,
                 data[idx + 2:])  # residue in the buffer, skip \r\n
@@ -252,7 +252,8 @@ class Request(Message):
                 if e.args[0] == ENOTCONN:
                     raise ForbiddenProxyRequest("UNKNOW")
                 raise
-            if remote_host not in self.cfg.proxy_allow_ips:
+            if ("*" not in self.cfg.proxy_allow_ips and
+                    remote_host not in self.cfg.proxy_allow_ips):
                 raise ForbiddenProxyRequest(remote_host)
 
     def parse_proxy_protocol(self, line):
@@ -300,10 +301,10 @@ class Request(Message):
             "proxy_port": d_port
         }
 
-    def parse_request_line(self, line):
-        bits = line.split(None, 2)
+    def parse_request_line(self, line_bytes):
+        bits = [bytes_to_str(bit) for bit in line_bytes.split(None, 2)]
         if len(bits) != 3:
-            raise InvalidRequestLine(line)
+            raise InvalidRequestLine(bytes_to_str(line_bytes))
 
         # Method
         if not METH_RE.match(bits[0]):
@@ -321,7 +322,10 @@ class Request(Message):
         else:
             self.uri = bits[1]
 
-        parts = urlsplit(self.uri)
+        try:
+            parts = urlsplit(self.uri)
+        except ValueError:
+            raise InvalidRequestLine(bytes_to_str(line_bytes))
         self.path = parts.path or ""
         self.query = parts.query or ""
         self.fragment = parts.fragment or ""

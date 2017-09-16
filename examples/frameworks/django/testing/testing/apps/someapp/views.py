@@ -1,5 +1,3 @@
-# Create your views here.
-
 import csv
 import io
 import os
@@ -7,7 +5,7 @@ from django import forms
 from django.http import HttpResponse
 from django.shortcuts import render_to_response
 from django.template import RequestContext
-import tempfile
+
 
 class MsgForm(forms.Form):
     subject = forms.CharField(max_length=100)
@@ -30,7 +28,6 @@ def home(request):
             message = form.cleaned_data['message']
             f = request.FILES['f']
 
-
             if not hasattr(f, "fileno"):
                 size = len(f.read())
             else:
@@ -40,7 +37,6 @@ def home(request):
                     size = len(f.read())
     else:
         form = MsgForm()
-
 
     return render_to_response('home.html', {
         'form': form,

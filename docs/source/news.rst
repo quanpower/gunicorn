@@ -1,218 +1,45 @@
+=========
 Changelog
 =========
 
-18.0 / 2013-08-26
------------------
+19.7.1 / 2017/03/21
+===================
 
-- new: add ``-e/--env`` command line argument to pass an environment variables to
-  gunicorn
-- new: add ``--chdir`` command line argument to specified directory
-  before apps loading.  - new: add wsgi.file_wrapper support in async workers
-- new: add ``--paste`` command line argument to set the paster config file
-- deprecated: the command ``gunicorn_django`` is now deprecated. You should now
-  run your application with the WSGI interface installed with your project (see
-  https://docs.djangoproject.com/en/1.4/howto/deployment/wsgi/gunicorn/) for
-  more infos.
-- deprecated:  the command ``gunicorn_paste`` is deprecated. You now should use
-  the new ``--paste`` argument to set the configuration file of your paster
-  application.
-- fix: Removes unmatched leading quote from the beginning of the default access
-  log format string
-- fix: null timeout
-- fix: gevent worker
-- fix: don't reload the paster app when using pserve
-- fix: after closing for error do not keep alive the connection
-- fix: responses 1xx, 204 and 304 should not force the connection to be closed
+- fix: continue if SO_REUSEPORT seems to be available but fails (:issue:`1480`)
+- fix: support non-decimal values for the umask command line option (:issue:`1325`)
 
-17.5 / 2013-07-03
-------------------
+19.7.0 / 2017/03/01
+===================
 
-- new: add signals documentation
-- new: add post_worker_init hook for workers
-- new: try to use gunicorn.conf.py in current folder as the default
-  config file.
-- fix graceful timeout with the Eventlet worker
-- fix: don't raise an error when closing the socket if already closed
-- fix: fix --settings parameter for django application and try to find
-  the django settings when using the ``gunicorn`` command.
-- fix: give the initial global_conf to paster application
+- The previously deprecated ``gunicorn_django`` command has been removed.
+  Use the :ref:`gunicorn-cmd` command-line interface instead.
+- The previously deprecated ``django_settings`` setting has been removed.
+  Use the :ref:`raw-env` setting instead.
+- The default value of :ref:`ssl-version` has been changed from
+  ``ssl.PROTOCOL_TLSv1`` to ``ssl.PROTOCOL_SSLv23``.
+- fix: initialize the group access list when initgroups is set (:issue:`1297`)
+- add environment variables to gunicorn access log format (:issue:`1291`)
+- add --paste-global-conf option (:issue:`1304`)
+- fix: print access logs to STDOUT (:issue:`1184`)
+- remove upper limit on max header size config (:issue:`1313`)
+- fix: print original exception on AppImportError (:issue:`1334`)
+- use SO_REUSEPORT if available (:issue:`1344`)
+- `fix leak <https://github.com/benoitc/gunicorn/commit/b4c41481e2d5ef127199a4601417a6819053c3fd>`_ of duplicate file descriptor for bound sockets.
+- add --reload-engine option, support inotify and other backends (:issue:`1368`, :issue:`1459`)
+- fix: reject request with invalid HTTP versions
+- add ``child_exit`` callback (:issue:`1394`)
+- add support for eventlets _AlreadyHandled object (:issue:`1406`)
+- format boot tracebacks properly with reloader (:issue:`1408`)
+- refactor socket activation and fd inheritance for better support of SystemD (:issue:`1310`)
+- fix: o fds are given by default in gunicorn (:issue:`1423`)
+- add ability to pass settings to GUNICORN_CMD_ARGS environnement variable which helps in container world (:issue:`1385`)
+- fix:  catch access denied to pid file (:issue:`1091`)
+-  many additions and improvements to the documentation
 
-New versionning:
-++++++++++++++++
+Breaking Change
++++++++++++++++
 
-With this release, the versionning of Gunicorn is changing. Gunicorn is
-stable since a long time and there is no point to release a "1.0" now.
-It should have been done since a long time. 0.17 really meant it was the
-17th stable version. From the beginning we have only 2 kind of
-releases:
-
-major release: releases with major changes or huge features added
-services releases: fixes and minor features added So from now we will
-apply the following versionning ``<major>.<service>``. For example ``17.5`` is a
-service release.
-
-0.17.4 / 2013-04-24
--------------------
-
-- fix unix socket address parsing
-
-0.17.3 / 2013-04-23
--------------------
-
-- add systemd sockets support
-- add ``python -m gunicorn.app.wsgiapp`` support
-- improve logger class inheritance
-- exit when the config file isn't found
-- add the -R option to enable stdio inheritance in daemon mode
-- don't close file descriptors > 3 in daemon mode
-- improve STDOUT/STDERR logging
-- fix pythonpath option
-- fix pidfile creation on Python 3
-- fix gevent worker exit
-- fix ipv6 detection when the platform isn't supporting it
-
-0.17.2 / 2013-01-07
--------------------
-
-- optimize readline
-- make imports errors more visiblle when loading an app or a logging
-  class
-- fix tornado worker: don't pass ssl options if there are none
-- fix PEP3333: accept only bytetrings in the response body
-- fix support on CYGWIN platforms
-
-0.17.1 / 2013-01-05
--------------------
-
-- add syslog facility name setting
-- fix ``--version`` command line argument
-- fix wsgi url_scheme for https
-
-0.17.0 / 2012-12-25
--------------------
-
-- allows gunicorn to bind to multiple address
-- add SSL support
-- add syslog support
-- add nworkers_changed hook
-- add response arg for post_request hook
-- parse command line with argparse (replace deprecated optparse)
-- fix PWD detection in arbiter
-- miscellenaeous PEP8 fixes
-
-0.16.1 / 2012-11-19
--------------------
-
-- Fix packaging
-
-0.16.0 / 2012-11-19
--------------------
-
-- **Added support for Python 3.2 & 3.3**
-- Expose --pythonpath command to all gunicorn commands
-- Honor $PORT environment variable, useful for deployement on heroku
-- Removed support for Python 2.5
-- Make sure we reopen the logs on the console
-- Fix django settings module detection from path
-- Reverted timeout for client socket. Fix issue on blocking issues.
-- Fixed gevent worker
-
-0.15.0 / 2012-10-18
--------------------
-
-- new documentation site on http://docs.gunicorn.org
-- new website on http://gunicorn.org
-- add `haproxy PROXY protocol <http://haproxy.1wt.eu/download/1.5/doc/proxy-protocol.txt>`_ support
-- add  ForwardedAllowIPS option: allows to filter Front-end's IPs
-  allowed to handle X-Forwarded-* headers.
-- add callable hooks for paster config
-- add x-forwarded-proto as secure scheme default (Heroku is using this)
-- allows gunicorn to load a pre-compiled application
-- support file reopening & reexec for all loggers
-- initialize the logging config file with defaults.
-- set timeout for client socket (slow client DoS).
-- NoMoreData, ChunkMissingTerminator, InvalidChunkSize are now
-  IOError exceptions
-- fix graceful shutdown in gevent
-- fix limit request line check
-
-0.14.6 / 2012-07-26
--------------------
-
-
-- fix gevent & subproces
-- fix request line length check
-- fix keepalive = 0
-- fix tornado worker
-
-0.14.5 / 2012-06-24
---------------------
-
-- fix logging during daemonisation
-
-0.14.4 / 2012-06-24
--------------------
-
-- new --graceful-timeout option
-- fix multiple issues with request limit
-- more fixes in django settings resolutions
-- fix gevent.core import
-- fix keepalive=0 in eventlet worker
-- fix handle_error display with the unix worker
-- fix tornado.wsgi.WSGIApplication calling error
-
-- **breaking change**: take the control on graceful reload back.
-  graceful can't be overrided anymore using the on_reload function.
-
-0.14.3 / 2012-05-15
--------------------
-
-- improvement: performance of http.body.Body.readline()
-- improvement: log HTTP errors in access log like Apache
-- improvment: display traceback when the worker fails to boot
-- improvement: makes gunicorn work with gevent 1.0
-- examples: websocket example now supports hybi13
-- fix: reopen log files after initialization
-- fix: websockets support
-- fix: django1.4 support
-- fix: only load the paster application 1 time
-
-0.14.2 / 2012-03-16
--------------------
-
-- add validate_class validator: allows to use a class or a method to
-  initialize the app during in-code configuration
-- add support for max_requests in tornado worker
-- add support for disabling x_forwarded_for_header in tornado worker
-- gevent_wsgi is now an alias of gevent_pywsgi
-- Fix gevent_pywsgi worker
-
-0.14.1 / 2012-03-02
--------------------
-
-- fixing source archive, reducing its size
-
-0.14.0 / 2012-02-27
--------------------
-
-- check if Request line is too large: You can now pass the parameter
-  ``--limit-request-line`` or set the ``limit_request_line`` in your
-  configuration file to set the max size of the request line in bytes.
-- limit the number of headers fields and their size. Add
-  ``--limit-request-field`` and ``limit-request-field-size`` settings
-- add ``p`` variable to the log access format to log pidfile
-- add ``{HeaderName}o`` variable to the logo access format to log the
-  response header HeaderName
-- request header is now logged with the variable ``{HeaderName}i`` in the
-  access log file
-- improve error logging
-- support logging.configFile
-- support django 1.4 in both gunicorn_django & run_gunicorn command
-- improve reload in django run_gunicorn command (should just work now)
-- allows people to set the ``X-Forwarded-For`` header key and disable it by
-  setting an empty string.
-- fix support of Tornado
-- many other fixes.
+- **Python 2.6.0** is the last supported version
 
 History
 =======
@@ -220,6 +47,10 @@ History
 .. toctree::
    :titlesonly:
 
+   2017-news
+   2016-news
+   2015-news
+   2014-news
    2013-news
    2012-news
    2011-news

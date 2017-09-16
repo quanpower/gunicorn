@@ -1,11 +1,12 @@
 from multiprocessing import Process, Queue
 import requests
-import gevent
+
 
 def child_process(queue):
     while True:
         print(queue.get())
         requests.get('http://requestb.in/15s95oz1')
+
 
 class GunicornSubProcessTestMiddleware(object):
     def __init__(self):
@@ -18,5 +19,5 @@ class GunicornSubProcessTestMiddleware(object):
         self.queue.put(('REQUEST',))
 
     def process_response(self, request, response):
-        self.queue.put(('RESPONSE',response.status_code))
+        self.queue.put(('RESPONSE', response.status_code))
         return response

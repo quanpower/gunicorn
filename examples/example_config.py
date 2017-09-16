@@ -32,20 +32,16 @@ backlog = 2048
 #       for your particular application's work load.
 #
 #   worker_class - The type of workers to use. The default
-#       async class should handle most 'normal' types of work
-#       loads. You'll want to read http://gunicorn/deployment.hml
+#       sync class should handle most 'normal' types of work
+#       loads. You'll want to read
+#       http://docs.gunicorn.org/en/latest/design.html#choosing-a-worker-type
 #       for information on when you might want to choose one
 #       of the other worker classes.
 #
-#       An string referring to a 'gunicorn.workers' entry point
-#       or a python path to a subclass of
+#       A string referring to a Python path to a subclass of
 #       gunicorn.workers.base.Worker. The default provided values
-#       are:
-#
-#           egg:gunicorn#sync
-#           egg:gunicorn#eventlet   - Requires eventlet >= 0.9.7
-#           egg:gunicorn#gevent     - Requires gevent >= 0.12.2 (?)
-#           egg:gunicorn#tornado    - Requires tornado >= 0.2
+#       can be seen at
+#       http://docs.gunicorn.org/en/latest/settings.html#worker-class
 #
 #   worker_connections - For the eventlet and gevent worker classes
 #       this limits the maximum number of simultaneous clients that
@@ -70,19 +66,11 @@ backlog = 2048
 #
 
 workers = 1
-worker_class = 'egg:gunicorn#sync'
+worker_class = 'sync'
 worker_connections = 1000
 timeout = 30
 keepalive = 2
 
-#
-# Debugging
-#
-#   debug - Turn on debugging in the server. This limits the number of
-#       worker processes to 1 and changes some error handling that's
-#       sent to clients.
-#
-#       True or False
 #
 #   spew - Install a trace function that spews every line of Python
 #       that is executed when running the server. This is the
@@ -91,7 +79,6 @@ keepalive = 2
 #       True or False
 #
 
-debug = False
 spew = False
 
 #
@@ -155,6 +142,7 @@ tmp_upload_dir = None
 errorlog = '-'
 loglevel = 'info'
 accesslog = '-'
+access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
 
 #
 # Process naming
@@ -199,4 +187,24 @@ def pre_exec(server):
     server.log.info("Forked child, re-executing.")
 
 def when_ready(server):
-    server.log.info("Server is ready. Spwawning workers")
+    server.log.info("Server is ready. Spawning workers")
+
+def worker_int(worker):
+    worker.log.info("worker received INT or QUIT signal")
+
+    ## get traceback info
+    import threading, sys, traceback
+    id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
+    code = []
+    for threadId, stack in sys._current_frames().items():
+        code.append("\n# Thread: %s(%d)" % (id2name.get(threadId,""),
+            threadId))
+        for filename, lineno, name, line in traceback.extract_stack(stack):
+            code.append('File: "%s", line %d, in %s' % (filename,
+                lineno, name))
+            if line:
+                code.append("  %s" % (line.strip()))
+    worker.log.debug("\n".join(code))
+
+def worker_abort(worker):
+    worker.log.info("worker received SIGABRT signal")
